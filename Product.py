@@ -5,6 +5,7 @@ import urllib3
 import datetime
 import os
 from tqdm import tqdm
+import concurrent.futures
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -142,29 +143,25 @@ def page_spider():
     # Create a progress bar
     progress_bar = tqdm(total=total_rows, desc="Scraping Progress", unit="rows", colour="blue")
 
-    for i, j in csvfile.iterrows():
-        fsn = str(j.values[0])
-        Prod_url = _CategoryLink + fsn
-        #Sell_url = _SellerLink + fsn
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = []
+        for i, j in csvfile.iterrows():
+            fsn = str(j.values[0])
+            Prod_url = _CategoryLink + fsn
+            #Sell_url = _SellerLink + fsn
 
-        #print(f"{GREEN}Processing URL: {RESET}{Prod_url}")
+            #print(f"{GREEN}Processing URL: {RESET}{Prod_url}")
+            futures.append(executor.submit(product_spider, Prod_url, fsn))
 
-        try:
-            # Make a GET request to the product URL
-            get_flipkart_page = requests.get(Prod_url, verify=True)
-
-            # Create a BeautifulSoup object from the response
-            flipkart_soup = BeautifulSoup(get_flipkart_page.text, 'html.parser')
-
-            # Sanity check
-            if flipkart_soup:
-                product_spider(Prod_url, fsn)
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
                 scraped_count += 1
                 progress_bar.update(1)
                 # print(f"{BLUE}Scraped {scraped_count}/{total_rows} rows")
 
-        except requests.RequestException as e:
-            print(f"{RED}Error fetching category page: {e}")
+            except requests.RequestException as e:
+                print(f"{RED}Error fetching category page: {e}")
 
     progress_bar.colour = "green"
     progress_bar.close()
